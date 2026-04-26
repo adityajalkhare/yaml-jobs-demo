@@ -3,9 +3,9 @@
 steps:
   - echo: "Deploying to ${{ inputs.target }} (dry-run=${{ inputs.dryRun }}, retries=${{ inputs.retries }})"
   - echo: "Tags: ${{ inputs.tags }}"
-${{ if inputs.extraEnv }}
+  ${{ if inputs.extraEnv }}
   - echo: "Extra environment provided: ${{ inputs.extraEnv }}"
-${{ end }}
+  ${{ end }}
   - sh: |
       echo "--- Deploy simulation ---"
       echo "Target: ${{ inputs.target }}"

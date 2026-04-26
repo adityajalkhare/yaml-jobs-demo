@@ -38,7 +38,7 @@ vars:
 
 # --- Reusable commands ---
 commands:
-  printInfo:
+  - name: printInfo
     inputs:
       - name: label
         default: "INFO"

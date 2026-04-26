@@ -1,0 +1,18 @@
+# Stage export: parallelChecks
+# Inputs: skipSecurity (boolean)
+stage: "Quality Checks"
+parallel:
+  - stage: Lint
+    steps:
+      - echo: "Running linter"
+      - sh: "echo 'Lint: 0 errors, 2 warnings'"
+  - stage: Security Scan
+    when:
+      expression: "${{ inputs.skipSecurity }} != true"
+    steps:
+      - echo: "Running security scan"
+      - sh: "echo 'No vulnerabilities found'"
+  - stage: Docs Check
+    steps:
+      - echo: "Checking documentation"
+      - sh: "echo 'All docs up to date'"

@@ -1,0 +1,7 @@
+# Script export: computeTag
+# Inputs: prefix (string), separator (string)
+# Returns: string
+script: |
+  def branch = env.BRANCH_NAME ?: 'local'
+  def buildNum = env.BUILD_NUMBER ?: '0'
+  return "${prefix}${branch}${separator}${buildNum}"

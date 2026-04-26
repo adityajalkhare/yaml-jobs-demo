@@ -1,0 +1,572 @@
+# =========================================================================
+# consumer-all-features.yaml
+#
+# Comprehensive pipeline consuming local-lib, remote-lib, and raw-lib.
+# Uses ONLY echo/sh steps (no Maven, npm, Docker, etc.).
+#
+# Demonstrates:
+#   - yamlLibraries: local + remote + raw-file libraries
+#   - use: at step level (manifest + raw-file + path@alias shorthand)
+#   - use: at stage level (with inputs, conditional blocks, post)
+#   - use: for script exports (as: capture)
+#   - vars: and commands: blocks
+#   - All when conditions (branch, tag, expression, environment, equals,
+#     changelog, changeset, buildingTag, triggeredBy, changeRequest,
+#     allOf, anyOf, not, beforeAgent, beforeInput)
+#   - All post conditions (always, success, failure, unstable, changed,
+#     fixed, regression, aborted, unsuccessful, cleanup)
+#   - if / elseIf / else control flow
+#   - try / catch / finally
+#   - while loop
+#   - each loop (static list, param, env, expression)
+#   - switch / case / default
+#   - waitUntil
+#   - Parallel stages
+#   - Matrix with axes + excludes
+#   - Stage-level each: (forEach)
+#   - Input directive
+#   - Nested sequential stages
+#   - Environment with credentials
+#   - Parameters, triggers, options, tools
+# =========================================================================
+schemaVersion: 1
+
+# --- Reusable variables ---
+vars:
+  appName: "demo-app"
+  buildLabel: "linux"
+
+# --- Reusable commands ---
+commands:
+  printInfo:
+    inputs:
+      - name: label
+        default: "INFO"
+    steps:
+      - echo: "[${{ inputs.label }}] App=${vars.appName}, Build=${env.BUILD_NUMBER}"
+      - sh: "echo 'Timestamp:' $(date)"
+
+# --- Repository declarations ---
+resources:
+  repositories:
+    - repository: local-lib-repo
+      type: local
+      path: ./local-lib
+    - repository: remote-lib-repo
+      type: git
+      name: https://github.com/adityajalkhare/yaml-library-demo.git
+      ref: v1.0.0
+      credentials: github-cred
+    - repository: raw-lib-repo
+      type: local
+      path: ./raw-lib
+
+# --- Library declarations ---
+yamlLibraries:
+  - name: local
+    repository: local-lib-repo
+    version: "2.0.0"
+  - name: remote
+    repository: remote-lib-repo
+    version: "1.0.0"
+  - name: utils
+    repository: raw-lib-repo
+
+# --- Pipeline ---
+pipeline:
+  agent:
+    label: "${vars.buildLabel}"
+
+  environment:
+    APP_NAME: "${vars.appName}"
+    BUILD_STAMP: "build-${env.BUILD_NUMBER}"
+    SECRET_TOKEN:
+      credentials: secret-token-id
+
+  parameters:
+    - string:
+        name: DEPLOY_TARGET
+        defaultValue: staging
+        description: "Target environment"
+    - booleanParam:
+        name: SKIP_TESTS
+        defaultValue: false
+    - choice:
+        name: LOG_LEVEL
+        choices:
+          - INFO
+          - DEBUG
+          - WARN
+
+  triggers:
+    - pollSCM: "H/15 * * * *"
+
+  options:
+    - buildDiscarder:
+        logRotator:
+          numToKeepStr: "10"
+    - timeout:
+        time: 60
+        unit: MINUTES
+    - timestamps: true
+    - disableConcurrentBuilds: true
+
+  stages:
+    # ------------------------------------------------------------------
+    # Stage 1: Banner from raw-file library
+    # ------------------------------------------------------------------
+    - stage: "Banner"
+      steps:
+        - use: utils/steps/banner.yaml
+        - printInfo:
+            label: START
+
+    # ------------------------------------------------------------------
+    # Stage 2: Greeting from local manifest library
+    # ------------------------------------------------------------------
+    - stage: "Greet"
+      steps:
+        - use: local/greet
+          inputs:
+            name: "World"
+            greeting: "Hey"
+            loud: true
+        - echo: "Greet step done"
+
+    # ------------------------------------------------------------------
+    # Stage 3: Script export with as: capture
+    # ------------------------------------------------------------------
+    - stage: "Compute Tag"
+      steps:
+        - use: local/computeTag
+          as: IMAGE_TAG
+          inputs:
+            prefix: "rc-"
+            separator: "."
+        - echo: "Computed tag: ${IMAGE_TAG}"
+        - sh: "echo 'Will push image with tag ${IMAGE_TAG}'"
+
+    # ------------------------------------------------------------------
+    # Stage 4: All when conditions showcase
+    # ------------------------------------------------------------------
+    - stage: "When - branch"
+      when:
+        branch: main
+      steps:
+        - echo: "Only on main branch"
+
+    - stage: "When - tag"
+      when:
+        tag: "v*"
+      steps:
+        - echo: "Only on version tags"
+
+    - stage: "When - expression"
+      when:
+        expression: "params.SKIP_TESTS == false"
+      steps:
+        - echo: "Tests not skipped"
+
+    - stage: "When - environment"
+      when:
+        environment:
+          name: APP_NAME
+          value: "demo-app"
+      steps:
+        - echo: "APP_NAME matches"
+
+    - stage: "When - equals"
+      when:
+        equals:
+          actual: "${params.LOG_LEVEL}"
+          expected: "DEBUG"
+      steps:
+        - echo: "Debug logging enabled"
+
+    - stage: "When - changelog"
+      when:
+        changelog: ".*RELEASE.*"
+      steps:
+        - echo: "Release commit detected"
+
+    - stage: "When - changeset"
+      when:
+        changeset: "src/**"
+      steps:
+        - echo: "Source files changed"
+
+    - stage: "When - buildingTag"
+      when:
+        buildingTag: true
+      steps:
+        - echo: "This is a tag build"
+
+    - stage: "When - triggeredBy"
+      when:
+        triggeredBy: TimerTrigger
+      steps:
+        - echo: "Triggered by timer"
+
+    - stage: "When - changeRequest"
+      when:
+        changeRequest: main
+      steps:
+        - echo: "PR targeting main"
+
+    - stage: "When - allOf composite"
+      when:
+        allOf:
+          - branch: main
+          - expression: "params.SKIP_TESTS == false"
+      steps:
+        - echo: "On main AND tests not skipped"
+
+    - stage: "When - anyOf composite"
+      when:
+        anyOf:
+          - branch: main
+          - branch: develop
+      steps:
+        - echo: "On main or develop"
+
+    - stage: "When - not"
+      when:
+        not:
+          branch: "feature/*"
+      steps:
+        - echo: "Not a feature branch"
+
+    - stage: "When - beforeAgent"
+      when:
+        beforeAgent: true
+        branch: main
+      steps:
+        - echo: "Evaluated before agent allocation"
+
+    # ------------------------------------------------------------------
+    # Stage 5: if / elseIf / else control flow
+    # ------------------------------------------------------------------
+    - stage: "If-ElseIf-Else"
+      steps:
+        - if:
+            condition: "params.DEPLOY_TARGET == 'production'"
+            steps:
+              - echo: "Production deploy"
+              - sh: "echo 'Extra safety checks for prod'"
+            elseIf:
+              - condition: "params.DEPLOY_TARGET == 'staging'"
+                steps:
+                  - echo: "Staging deploy"
+              - condition: "params.DEPLOY_TARGET == 'dev'"
+                steps:
+                  - echo: "Dev deploy"
+            else:
+              - echo: "Unknown target: ${params.DEPLOY_TARGET}"
+
+    # ------------------------------------------------------------------
+    # Stage 6: try / catch / finally
+    # ------------------------------------------------------------------
+    - stage: "Try-Catch-Finally"
+      steps:
+        - try:
+            steps:
+              - echo: "Attempting risky operation"
+              - sh: "echo 'Simulating work' && exit 0"
+            catch:
+              variable: err
+              steps:
+                - echo: "Caught error: ${err}"
+                - sh: "echo 'Running recovery'"
+            finally:
+              - echo: "Cleanup runs regardless"
+
+    # ------------------------------------------------------------------
+    # Stage 7: while loop
+    # ------------------------------------------------------------------
+    - stage: "While Loop"
+      steps:
+        - sh:
+            script: "echo 0 > /tmp/counter.txt"
+        - while:
+            condition: "readFile('/tmp/counter.txt').trim().toInteger() < 3"
+            steps:
+              - sh: |
+                  CURR=$(cat /tmp/counter.txt)
+                  NEXT=$((CURR + 1))
+                  echo "Iteration $NEXT"
+                  echo $NEXT > /tmp/counter.txt
+
+    # ------------------------------------------------------------------
+    # Stage 8: each loop - all item forms
+    # ------------------------------------------------------------------
+    - stage: "Each - static list"
+      steps:
+        - each:
+            items:
+              - alpha
+              - bravo
+              - charlie
+            as: svc
+            steps:
+              - echo: "Processing service: ${svc}"
+
+    - stage: "Each - from parameter"
+      steps:
+        - each:
+            items:
+              param: DEPLOY_TARGET
+              tokenize: ","
+            as: target
+            steps:
+              - echo: "Deploy target: ${target}"
+
+    - stage: "Each - from env var"
+      environment:
+        MODULES: "api:web:worker"
+      steps:
+        - each:
+            items:
+              env: MODULES
+              tokenize: ":"
+            as: mod
+            steps:
+              - echo: "Module: ${mod}"
+
+    - stage: "Each - from expression"
+      steps:
+        - each:
+            items:
+              expr: "['x', 'y', 'z']"
+            as: letter
+            steps:
+              - echo: "Letter: ${letter}"
+
+    # ------------------------------------------------------------------
+    # Stage 9: switch / case / default
+    # ------------------------------------------------------------------
+    - stage: "Switch-Case"
+      steps:
+        - switch:
+            on: "${params.LOG_LEVEL}"
+            cases:
+              - case: "DEBUG"
+                steps:
+                  - echo: "Verbose logging ON"
+                  - sh: "echo 'Debug mode'"
+              - case: "WARN"
+                steps:
+                  - echo: "Warning-level logging"
+            default:
+              - echo: "Standard INFO logging"
+
+    # ------------------------------------------------------------------
+    # Stage 10: waitUntil
+    # ------------------------------------------------------------------
+    - stage: "WaitUntil"
+      steps:
+        - waitUntil:
+            condition:
+              sh:
+                script: "test -f /tmp/counter.txt"
+                returnStatus: true
+            initialRecurrencePeriod: 1000
+
+    # ------------------------------------------------------------------
+    # Stage 11: Parallel stages (native)
+    # ------------------------------------------------------------------
+    - stage: "Parallel Native"
+      parallel:
+        - stage: "Parallel A"
+          steps:
+            - echo: "Running A"
+            - sh: "echo 'Task A done'"
+        - stage: "Parallel B"
+          steps:
+            - echo: "Running B"
+            - sh: "echo 'Task B done'"
+        - stage: "Parallel C"
+          when:
+            expression: "params.SKIP_TESTS == false"
+          steps:
+            - echo: "Running C (conditional)"
+
+    # ------------------------------------------------------------------
+    # Stage 12: Parallel checks from library stage export
+    # ------------------------------------------------------------------
+    - use: local/parallelChecks
+      inputs:
+        skipSecurity: false
+
+    # ------------------------------------------------------------------
+    # Stage 13: Matrix build
+    # ------------------------------------------------------------------
+    - stage: "Matrix"
+      matrix:
+        axes:
+          - axis:
+              name: OS
+              values:
+                - linux
+                - macos
+          - axis:
+              name: ARCH
+              values:
+                - amd64
+                - arm64
+        excludes:
+          - exclude:
+              - axis:
+                  name: OS
+                  values:
+                    - macos
+              - axis:
+                  name: ARCH
+                  values:
+                    - arm64
+        stages:
+          - stage: "Build ${OS}-${ARCH}"
+            steps:
+              - echo: "Building on ${OS} / ${ARCH}"
+              - sh: "echo 'Compile for ${OS}-${ARCH} OK'"
+
+    # ------------------------------------------------------------------
+    # Stage 14: Stage-level each (forEach over stages)
+    # ------------------------------------------------------------------
+    - stage: "Deploy Regions"
+      each:
+        items:
+          - us-east-1
+          - eu-west-1
+          - ap-southeast-1
+        as: region
+      steps:
+        - echo: "Deploying to ${region}"
+        - sh: "echo 'Region ${region} deploy OK'"
+
+    # ------------------------------------------------------------------
+    # Stage 15: Nested sequential stages
+    # ------------------------------------------------------------------
+    - stage: "Integration"
+      stages:
+        - stage: "Setup Fixtures"
+          steps:
+            - echo: "Loading test fixtures"
+        - stage: "Run Integration Tests"
+          steps:
+            - echo: "Running integration suite"
+            - sh: "echo '42 tests passed'"
+        - stage: "Teardown"
+          steps:
+            - echo: "Tearing down fixtures"
+
+    # ------------------------------------------------------------------
+    # Stage 16: Stage with input directive
+    # ------------------------------------------------------------------
+    - stage: "Manual Gate"
+      input:
+        message: "Proceed to production?"
+        ok: "Deploy!"
+        submitter: "admin,release-team"
+        submitterParameter: APPROVER
+        parameters:
+          - string:
+              name: RELEASE_NOTES
+              defaultValue: ""
+              description: "Optional release notes"
+      steps:
+        - echo: "Approved by ${APPROVER}"
+        - echo: "Notes: ${RELEASE_NOTES}"
+
+    # ------------------------------------------------------------------
+    # Stage 17: Test stage from library with when + post
+    # ------------------------------------------------------------------
+    - use: local/testStage
+      inputs:
+        suite: unit
+        branch: main
+        verbose: true
+
+    - use: local/testStage
+      inputs:
+        suite: integration
+        branch: main
+
+    # ------------------------------------------------------------------
+    # Stage 18: Deploy steps from library (enum input, conditional block)
+    # ------------------------------------------------------------------
+    - stage: "Deploy"
+      when:
+        allOf:
+          - branch: main
+          - expression: "params.DEPLOY_TARGET == 'staging'"
+      steps:
+        - use: local/deploySteps
+          inputs:
+            target: staging
+            dryRun: false
+            retries: 2
+            tags:
+              - latest
+              - "${IMAGE_TAG}"
+            extraEnv:
+              REGION: us-east-1
+              REPLICAS: "3"
+
+    # ------------------------------------------------------------------
+    # Stage 19: Notification from remote library
+    # ------------------------------------------------------------------
+    - stage: "Notify"
+      steps:
+        - use: remote/notify
+          inputs:
+            channel: "#deployments"
+            message: "Build ${env.BUILD_NUMBER} complete"
+            mentions:
+              - "@oncall"
+              - "@devlead"
+
+    # ------------------------------------------------------------------
+    # Stage 20: Approval gate from remote library (input + post)
+    # ------------------------------------------------------------------
+    - use: remote/approvalGate
+      inputs:
+        environment: staging
+        submitter: release-team
+        timeout: 15
+
+    # ------------------------------------------------------------------
+    # Stage 21: Raw-file stage (cleanup)
+    # ------------------------------------------------------------------
+    - use: utils/stages/cleanup.yaml
+
+    # ------------------------------------------------------------------
+    # Stage 22: Path@alias shorthand syntax
+    # ------------------------------------------------------------------
+    - stage: "Banner (shorthand)"
+      steps:
+        - use: steps/banner.yaml@utils
+
+  # --- Pipeline-level post with all 10 conditions ---
+  post:
+    always:
+      - echo: "Pipeline finished"
+      - sh: "echo 'Total stages executed'"
+    success:
+      - echo: "BUILD SUCCESS"
+    failure:
+      - echo: "BUILD FAILED"
+    unstable:
+      - echo: "BUILD UNSTABLE"
+    changed:
+      - echo: "Build status CHANGED from previous"
+    fixed:
+      - echo: "Build is FIXED (was failing)"
+    regression:
+      - echo: "Build REGRESSED (was passing)"
+    aborted:
+      - echo: "Build was ABORTED"
+    unsuccessful:
+      - echo: "Build was UNSUCCESSFUL"
+    cleanup:
+      - echo: "Final cleanup"
+      - sh: "echo 'Workspace cleaned'"

@@ -1,0 +1,98 @@
+schemaVersion: 1
+name: local-lib
+version: "2.0.0"
+description: Local library with all export types, exercising every input type.
+maintainers:
+  - team@example.com
+
+exports:
+  steps:
+    - name: greet
+      file: steps/greet.yaml
+      description: Greeting steps with optional loud mode.
+      inputs:
+        - name: name
+          type: string
+          required: true
+        - name: greeting
+          type: string
+          default: "Hello"
+        - name: loud
+          type: boolean
+          default: false
+
+    - name: deploySteps
+      file: steps/deploy-steps.yaml
+      description: Simulated deploy with conditional pre-check.
+      inputs:
+        - name: target
+          type: string
+          required: true
+          enum:
+            - staging
+            - production
+        - name: dryRun
+          type: boolean
+          default: true
+        - name: retries
+          type: int
+          default: 3
+        - name: tags
+          type: list
+          default:
+            - latest
+        - name: extraEnv
+          type: map
+          required: false
+
+  stages:
+    - name: testStage
+      file: stages/test-stage.yaml
+      description: Full test stage with when, post, environment.
+      inputs:
+        - name: suite
+          type: string
+          required: true
+          enum:
+            - unit
+            - integration
+            - smoke
+        - name: branch
+          type: string
+          default: "main"
+        - name: verbose
+          type: boolean
+          default: false
+
+    - name: parallelChecks
+      file: stages/parallel-checks.yaml
+      description: Parallel sub-stages for lint, security, docs.
+      inputs:
+        - name: skipSecurity
+          type: boolean
+          default: false
+
+  scripts:
+    - name: computeTag
+      file: scripts/compute-tag.yaml
+      returns: string
+      description: Builds a docker-style tag from branch + build number.
+      inputs:
+        - name: prefix
+          type: string
+          default: "v"
+        - name: separator
+          type: string
+          default: "-"
+
+  pipelines:
+    - name: standardCi
+      file: pipelines/standard-ci.yaml
+      description: Full CI pipeline template.
+      inputs:
+        - name: appName
+          type: string
+          required: true
+        - name: runDeploy
+          type: boolean
+          default: false

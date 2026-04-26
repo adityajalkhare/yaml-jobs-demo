@@ -1,0 +1,24 @@
+# Pipeline export: standardCi
+# Inputs: appName (string, required), runDeploy (boolean)
+pipeline:
+  agent: any
+  environment:
+    APP_NAME: "${{ inputs.appName }}"
+  stages:
+    - stage: "Build ${{ inputs.appName }}"
+      steps:
+        - echo: "Building ${{ inputs.appName }}"
+        - sh: "echo 'Compile OK'"
+    - stage: "Test ${{ inputs.appName }}"
+      steps:
+        - echo: "Testing ${{ inputs.appName }}"
+        - sh: "echo 'All tests passed'"
+${{ if inputs.runDeploy }}
+    - stage: "Deploy ${{ inputs.appName }}"
+      steps:
+        - echo: "Deploying ${{ inputs.appName }}"
+        - sh: "echo 'Deployed successfully'"
+${{ end }}
+  post:
+    always:
+      - echo: "Pipeline for ${{ inputs.appName }} finished"

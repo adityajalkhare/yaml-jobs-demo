@@ -1,0 +1,8 @@
+# Step export: greet
+# Inputs: name (string, required), greeting (string), loud (boolean)
+steps:
+  - echo: "${{ inputs.greeting }}, ${{ inputs.name }}!"
+  - sh: "echo 'Timestamp:' $(date)"
+${{ if inputs.loud }}
+  - sh: "echo '${{ inputs.greeting }}, ${{ inputs.name }}!!!' | tr '[:lower:]' '[:upper:]'"
+${{ end }}

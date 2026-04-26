@@ -1,0 +1,24 @@
+# =========================================================================
+# consumer-pipeline-use.yaml
+#
+# Demonstrates pipeline-level use: where the ENTIRE pipeline definition
+# comes from a library export. The consumer only provides inputs.
+# =========================================================================
+schemaVersion: 1
+
+resources:
+  repositories:
+    - repository: local-lib-repo
+      type: local
+      path: ./local-lib
+
+yamlLibraries:
+  - name: local
+    repository: local-lib-repo
+    version: "2.0.0"
+
+# Pipeline-level use: replaces the entire pipeline: block
+use: local/standardCi
+inputs:
+  appName: "my-service"
+  runDeploy: true

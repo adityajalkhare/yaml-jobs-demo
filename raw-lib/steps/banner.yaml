@@ -1,0 +1,6 @@
+# Raw step file (no manifest needed). Reference as: use: utils/steps/banner.yaml
+steps:
+  - echo: "============================================"
+  - echo: "=        PIPELINE EXECUTION START          ="
+  - echo: "============================================"
+  - sh: "echo 'Host:' $(hostname) '| Date:' $(date) '| User:' $(whoami)"

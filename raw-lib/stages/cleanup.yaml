@@ -1,0 +1,8 @@
+# Raw stage file (no manifest needed). Reference as: use: utils/stages/cleanup.yaml
+stage: Cleanup
+steps:
+  - echo: "Cleaning up workspace"
+  - sh: "echo 'Removing temp files' && echo 'Cleanup done'"
+post:
+  always:
+    - echo: "Cleanup stage finished"

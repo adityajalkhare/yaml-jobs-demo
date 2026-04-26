@@ -44,7 +44,7 @@ commands:
         default: "INFO"
     steps:
       - echo: "[${{ inputs.label }}] App=${vars.appName}, Build=${env.BUILD_NUMBER}"
-      - sh: "echo 'Timestamp:' $(date)"
+      - sh: "date '+Timestamp: %Y-%m-%d %H:%M:%S'"
 
 # --- Repository declarations ---
 resources:

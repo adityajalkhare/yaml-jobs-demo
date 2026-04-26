@@ -9,8 +9,10 @@ schemaVersion: 1
 resources:
   repositories:
     - repository: local-lib-repo
-      type: local
-      path: ./local-lib
+      type: git
+      name: https://github.com/adityajalkhare/yaml-jobs-demo.git
+      ref: main
+      path: local-lib                      # subdirectory within the cloned repo
 
 yamlLibraries:
   - name: local

@@ -50,16 +50,20 @@ commands:
 resources:
   repositories:
     - repository: local-lib-repo
-      type: local
-      path: ./local-lib
+      type: git
+      name: https://github.com/adityajalkhare/yaml-jobs-demo.git
+      ref: main
+      path: local-lib
     - repository: remote-lib-repo
       type: git
       name: https://github.com/adityajalkhare/yaml-library-demo.git
-      ref: v1.0.0
-      # credentials: github-cred
+      ref: main
+      path: remote-lib
     - repository: raw-lib-repo
-      type: local
-      path: ./raw-lib
+      type: git
+      name: https://github.com/adityajalkhare/yaml-jobs-demo.git
+      ref: main
+      path: raw-lib
 
 # --- Library declarations ---
 yamlLibraries:

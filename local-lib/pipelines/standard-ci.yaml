@@ -21,4 +21,5 @@ ${{ if inputs.runDeploy }}
 ${{ end }}
   post:
     always:
+      - cleanWs: true
       - echo: "Pipeline for ${{ inputs.appName }} finished"

@@ -369,11 +369,11 @@ pipeline:
     - stage: "WaitUntil"
       steps:
         - waitUntil:
-            condition:
-              sh:
-                script: "test -f /tmp/counter.txt"
-                returnStatus: true
             initialRecurrencePeriod: 1000
+            steps:
+            -  sh:
+                  script: "test -f /tmp/counter.txt"
+                  returnStatus: true
 
     # ------------------------------------------------------------------
     # Stage 11: Parallel stages (native)

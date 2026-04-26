@@ -56,7 +56,7 @@ resources:
       type: git
       name: https://github.com/adityajalkhare/yaml-library-demo.git
       ref: v1.0.0
-      credentials: github-cred
+      # credentials: github-cred
     - repository: raw-lib-repo
       type: local
       path: ./raw-lib

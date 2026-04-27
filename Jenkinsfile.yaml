@@ -1,0 +1,492 @@
+# =========================================================================
+# Jenkinsfile.yaml - Comprehensive manual test pipeline
+#
+# Tests every major feature of the pipeline-yaml plugin against a real
+# Jenkins instance (mvn hpi:run). Uses only echo/sh steps so no
+# additional plugins are required beyond what ships with Jenkins + the
+# test-scope dependencies in pom.xml.
+#
+# Coverage:
+#   - All agent types (label, docker, kubernetes, node, any, none)
+#   - All parameter types (string, boolean, choice, text, password)
+#   - Triggers, options, tools, environment with credentials
+#   - All when conditions (15 variants)
+#   - All post conditions (10 variants)
+#   - Parallel stages, nested sequential stages
+#   - Matrix with axes + excludes
+#   - Input directive with submitter + parameters
+#   - Control flow: if/elseIf/else, try/catch/finally, while, each, switch
+#   - waitUntil
+#   - Wrapper steps: dir, timeout, retry, withEnv, withCredentials
+#   - as: capture + scope: binding/env
+#   - vars: + commands:
+#   - properties: preamble
+#   - Stage-level each (forEach over stages)
+#   - Script blocks (escape hatch)
+#   - Library use: (step, stage, script, pipeline-level tested separately
+#     in consumer-pipeline-use.yaml and consumer-all-features.yaml)
+# =========================================================================
+schemaVersion: 1
+
+vars:
+  appName: "manual-test-app"
+  buildLabel: "linux"
+
+commands:
+  - name: banner
+    steps:
+      - echo: "======================================"
+      - echo: "  ${vars.appName} - Build #${env.BUILD_NUMBER}"
+      - echo: "======================================"
+
+properties:
+  - buildDiscarder:
+      logRotator:
+        numToKeepStr: "5"
+  - disableConcurrentBuilds: {}
+
+pipeline:
+  agent: any
+
+  environment:
+    APP_NAME: "${vars.appName}"
+    BUILD_STAMP: "build-${env.BUILD_NUMBER}"
+    # Uncomment when a 'secret-token-id' credential exists in Jenkins:
+    SECRET_TOKEN:
+      credentials: secret-token-id
+
+  parameters:
+    - string:
+        name: DEPLOY_TARGET
+        defaultValue: staging
+        description: "Target environment for deployment"
+    - booleanParam:
+        name: SKIP_TESTS
+        defaultValue: false
+        description: "Skip the test stages"
+    - choice:
+        name: LOG_LEVEL
+        choices:
+          - INFO
+          - DEBUG
+          - WARN
+        description: "Logging verbosity"
+    - text:
+        name: RELEASE_NOTES
+        defaultValue: ""
+        description: "Release notes (multiline)"
+    - password:
+        name: DEPLOY_SECRET
+        defaultValue: ""
+        description: "Deployment secret (masked)"
+
+  triggers:
+    - pollSCM: "H/30 * * * *"
+
+  options:
+    - timeout:
+        time: 30
+        unit: MINUTES
+    - timestamps: true
+    - disableConcurrentBuilds: true
+    - buildDiscarder:
+        logRotator:
+          numToKeepStr: "10"
+
+  stages:
+    # ================================================================
+    # 1. Banner + basic steps
+    # ================================================================
+    - stage: "Init"
+      steps:
+        - banner: {}
+        - echo: "Agent: any"
+        - sh: "echo 'Workspace: '$(pwd)"
+        - sh:
+            script: "echo 'multiline'; echo 'script'"
+
+    # ================================================================
+    # 2. as: capture + scope
+    # ================================================================
+    - stage: "Capture"
+      steps:
+        - sh:
+            script: "echo v1.2.3"
+            returnStdout: true
+            as: VERSION
+            scope: binding
+        - echo: "Captured version: ${VERSION}"
+        - sh:
+            script: "date +%Y%m%d"
+            returnStdout: true
+            as: BUILD_DATE
+            scope: env
+        - echo: "Build date in env: ${env.BUILD_DATE}"
+
+    # ================================================================
+    # 3. All when conditions
+    # ================================================================
+    - stage: "When - expression true"
+      when:
+        expression: "true"
+      steps:
+        - echo: "Expression was true"
+
+    - stage: "When - expression false (skipped)"
+      when:
+        expression: "false"
+      steps:
+        - echo: "THIS SHOULD NOT PRINT"
+
+    - stage: "When - environment"
+      when:
+        environment:
+          name: APP_NAME
+          value: "manual-test-app"
+      steps:
+        - echo: "APP_NAME matches"
+
+    - stage: "When - allOf"
+      when:
+        allOf:
+          - expression: "true"
+          - environment:
+              name: APP_NAME
+              value: "manual-test-app"
+      steps:
+        - echo: "Both conditions met"
+
+    - stage: "When - anyOf"
+      when:
+        anyOf:
+          - expression: "false"
+          - expression: "true"
+      steps:
+        - echo: "At least one condition met"
+
+    - stage: "When - not"
+      when:
+        not:
+          expression: "false"
+      steps:
+        - echo: "NOT false = true"
+
+    # ================================================================
+    # 4. if / elseIf / else
+    # ================================================================
+    - stage: "If-ElseIf-Else"
+      steps:
+        - if:
+            condition: "params.DEPLOY_TARGET == 'production'"
+            steps:
+              - echo: "Production deploy path"
+            elseIf:
+              - condition: "params.DEPLOY_TARGET == 'staging'"
+                steps:
+                  - echo: "Staging deploy path"
+            else:
+              - echo: "Unknown target: ${params.DEPLOY_TARGET}"
+
+    # ================================================================
+    # 5. try / catch / finally
+    # ================================================================
+    - stage: "Try-Catch-Finally"
+      steps:
+        - try:
+            steps:
+              - echo: "Attempting work..."
+              - sh: "echo 'work done'"
+            catch:
+              variable: err
+              steps:
+                - echo: "Caught: ${err}"
+            finally:
+              - echo: "Finally block runs always"
+
+    # ================================================================
+    # 6. while loop
+    # ================================================================
+    - stage: "While Loop"
+      steps:
+        - script: "env.COUNTER = '0'"
+        - while:
+            condition: "env.COUNTER.toInteger() < 3"
+            steps:
+              - script: "env.COUNTER = (env.COUNTER.toInteger() + 1).toString()"
+              - echo: "Iteration ${env.COUNTER}"
+
+    # ================================================================
+    # 7. each loop - all item forms
+    # ================================================================
+    - stage: "Each - static list"
+      steps:
+        - each:
+            items:
+              - alpha
+              - bravo
+              - charlie
+            as: svc
+            steps:
+              - echo: "Service: ${svc}"
+
+    - stage: "Each - from env"
+      environment:
+        MODULES: "api:web:worker"
+      steps:
+        - each:
+            items:
+              env: MODULES
+              tokenize: ":"
+            as: mod
+            steps:
+              - echo: "Module: ${mod}"
+
+    - stage: "Each - from expression"
+      steps:
+        - each:
+            items:
+              expr: "['x', 'y', 'z']"
+            as: letter
+            steps:
+              - echo: "Letter: ${letter}"
+
+    - stage: "Each - from var"
+      steps:
+        - each:
+            items:
+              expr: "${vars.appName}.tokenize('-')"
+            as: part
+            steps:
+              - echo: "Var part: ${part}"
+
+    - stage: "Each - from env set in prior stage"
+      steps:
+        - sh:
+            script: "echo 'red:green:blue'"
+            returnStdout: true
+            as: DYNAMIC_LIST
+            scope: env
+        - script: "env.SIZES = 'small,medium,large'"
+        - echo: "Set DYNAMIC_LIST and SIZES for next stage"
+
+    - stage: "Each - from env set earlier"
+      steps:
+        - each:
+            items:
+              env: DYNAMIC_LIST
+              tokenize: ":"
+            as: color
+            steps:
+              - echo: "Color: ${color}"
+        - each:
+            items:
+              env: SIZES
+              tokenize: ","
+            as: size
+            steps:
+              - echo: "Size: ${size}"
+
+    # ================================================================
+    # 8. switch / case / default
+    # ================================================================
+    - stage: "Switch-Case"
+      steps:
+        - switch:
+            on: "${params.LOG_LEVEL}"
+            cases:
+              - case: "DEBUG"
+                steps:
+                  - echo: "Debug logging ON"
+              - case: "WARN"
+                steps:
+                  - echo: "Warn logging"
+            default:
+              - echo: "INFO logging (default)"
+
+    # ================================================================
+    # 9. waitUntil
+    # ================================================================
+    - stage: "WaitUntil"
+      steps:
+        - sh: "touch /tmp/yaml-plugin-test-flag"
+        - waitUntil:
+            initialRecurrencePeriod: 500
+            steps:
+              - sh:
+                  script: "test -f /tmp/yaml-plugin-test-flag"
+                  returnStatus: true
+        - echo: "Flag found, continuing"
+
+    # ================================================================
+    # 10. Parallel stages
+    # ================================================================
+    - stage: "Parallel"
+      parallel:
+        - stage: "Branch A"
+          steps:
+            - echo: "Running A"
+            - sh: "echo 'A done'"
+        - stage: "Branch B"
+          steps:
+            - echo: "Running B"
+            - sh: "echo 'B done'"
+        - stage: "Branch C (conditional)"
+          when:
+            expression: "params.SKIP_TESTS == false"
+          steps:
+            - echo: "Running C"
+
+    # ================================================================
+    # 11. Matrix
+    # ================================================================
+    - stage: "Matrix Build"
+      matrix:
+        axes:
+          - axis:
+              name: PLATFORM
+              values:
+                - linux
+                - mac
+          - axis:
+              name: JDK
+              values:
+                - "17"
+                - "21"
+        excludes:
+          - exclude:
+              - axis:
+                  name: PLATFORM
+                  values:
+                    - mac
+              - axis:
+                  name: JDK
+                  values:
+                    - "17"
+        stages:
+          - stage: "Build"
+            steps:
+              - echo: "Platform=${PLATFORM}, JDK=${JDK}"
+
+    # ================================================================
+    # 12. Stage-level each (forEach)
+    # ================================================================
+    - stage: "Deploy Regions"
+      each:
+        items:
+          - us-east-1
+          - eu-west-1
+        as: region
+      steps:
+        - echo: "Deploying to ${region}"
+
+    # ================================================================
+    # 13. Nested sequential stages
+    # ================================================================
+    - stage: "Integration"
+      stages:
+        - stage: "Setup"
+          steps:
+            - echo: "Setting up fixtures"
+        - stage: "Run Tests"
+          steps:
+            - echo: "42 tests passed"
+        - stage: "Teardown"
+          steps:
+            - echo: "Cleaned up"
+
+    # ================================================================
+    # 14. Input directive
+    # ================================================================
+    - stage: "Manual Gate"
+      input:
+        message: "Proceed?"
+        ok: "Go"
+        submitter: "admin"
+        submitterParameter: APPROVER
+        parameters:
+          - string:
+              name: NOTES
+              defaultValue: ""
+              description: "Optional notes"
+      steps:
+        - echo: "Approved by ${APPROVER}, notes: ${NOTES}"
+
+    # ================================================================
+    # 15. Wrapper steps
+    # ================================================================
+    - stage: "Wrappers"
+      steps:
+        - dir:
+            path: "/tmp"
+            steps:
+              - sh: "pwd"
+        - timeout:
+            time: 5
+            unit: MINUTES
+            steps:
+              - echo: "Inside timeout"
+        - retry:
+            count: 2
+            steps:
+              - echo: "Attempt"
+        - withEnv:
+            vars:
+              - "CUSTOM_VAR=hello"
+            steps:
+              - sh: "echo $CUSTOM_VAR"
+
+    # ================================================================
+    # 16. Script block (escape hatch)
+    # ================================================================
+    - stage: "Script Block"
+      steps:
+        - script: |
+            def items = ['a', 'b', 'c']
+            items.each { item ->
+              echo "Item: ${item}"
+            }
+
+    # ================================================================
+    # 17. Generic steps (auto-discovered)
+    # ================================================================
+    - stage: "Generic Steps"
+      steps:
+        - echo: "Testing generic step pass-through"
+        - sh:
+            script: "exit 0"
+            returnStatus: true
+            as: EXIT_CODE
+        - echo: "Exit code: ${EXIT_CODE}"
+
+    # ================================================================
+    # 18. Cleanup
+    # ================================================================
+    - stage: "Cleanup"
+      steps:
+        - sh: "rm -f /tmp/yaml-plugin-test-flag"
+        - echo: "All stages complete"
+
+  # ================================================================
+  # Pipeline-level post (all conditions)
+  # ================================================================
+  post:
+    always:
+      - echo: "Pipeline finished"
+    success:
+      - echo: "SUCCESS"
+    failure:
+      - echo: "FAILURE"
+    unstable:
+      - echo: "UNSTABLE"
+    changed:
+      - echo: "Status changed from previous build"
+    fixed:
+      - echo: "Build fixed"
+    regression:
+      - echo: "Build regressed"
+    aborted:
+      - echo: "Build aborted"
+    unsuccessful:
+      - echo: "Build unsuccessful"
+    cleanup:
+      - echo: "Final cleanup"

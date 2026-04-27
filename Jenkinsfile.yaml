@@ -254,7 +254,7 @@ pipeline:
       steps:
         - each:
             items:
-              expr: "${vars.appName}.tokenize('-')"
+              expr: "appName.tokenize('-')"
             as: part
             steps:
               - echo: "Var part: ${part}"
@@ -292,7 +292,7 @@ pipeline:
     - stage: "Switch-Case"
       steps:
         - switch:
-            on: "${params.LOG_LEVEL}"
+            on: "params.LOG_LEVEL"
             cases:
               - case: "DEBUG"
                 steps:
